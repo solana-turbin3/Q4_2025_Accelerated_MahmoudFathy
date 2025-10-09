@@ -35,6 +35,7 @@ impl<'info> InitializeExtraAccountMetaList<'info> {
                         Seed::Literal {
                             bytes: b"whitelist".to_vec(),
                         },
+                        Seed::AccountKey { index: 0 }  // Should refer to user pubkey
                     ],
                     false, // is_signer
                     false // is_writable

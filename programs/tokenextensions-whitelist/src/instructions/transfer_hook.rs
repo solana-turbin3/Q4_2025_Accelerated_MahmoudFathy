@@ -41,7 +41,7 @@ pub struct TransferHook<'info> {
     )]
     pub extra_account_meta_list: UncheckedAccount<'info>,
     #[account(
-        seeds = [b"whitelist"], 
+        seeds = [b"whitelist", owner.key().as_ref()], 
         bump = whitelist.bump,
     )]
     pub whitelist: Account<'info, Whitelist>,
@@ -53,9 +53,10 @@ impl<'info> TransferHook<'info> {
         // Fail this instruction if it is not called from within a transfer hook
         self.check_is_transferring()?;
 
-        if !self.whitelist.address.contains(self.owner.key) {
+        // Challenge:
+        if !self.whitelist.is_whitelisted {
             panic!("TransferHook: Owner is not whitelisted");
-        };
+        }
 
         Ok(())
     }

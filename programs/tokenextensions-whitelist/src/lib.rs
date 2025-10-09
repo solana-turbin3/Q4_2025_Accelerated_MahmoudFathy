@@ -23,17 +23,14 @@ declare_id!("E5iLMqv3rqSzpu743Vz7uhWzcw476F1cj6VQatgoJRs9");
 pub mod tokenextensions_whitelist {
     use super::*;
 
-    pub fn initialize_whitelist(ctx: Context<InitializeWhitelist>) -> Result<()> {
-        ctx.accounts.initialize_whitelist(ctx.bumps)
-    }
-
-
+    // Challenge edited
     pub fn add_to_whitelist(ctx: Context<WhitelistOperations>, user: Pubkey) -> Result<()> {
-        ctx.accounts.add_to_whitelist(user)
+        ctx.accounts.add_to_whitelist(ctx.bumps)
     }
 
+    // Challenge edited
     pub fn remove_from_whitelist(ctx: Context<WhitelistOperations>, user: Pubkey) -> Result<()> {
-        ctx.accounts.remove_from_whitelist(user)
+        ctx.accounts.remove_from_whitelist(ctx.bumps)
     }
 
     #[instruction(discriminator = InitializeExtraAccountMetaListInstruction::SPL_DISCRIMINATOR_SLICE)]
