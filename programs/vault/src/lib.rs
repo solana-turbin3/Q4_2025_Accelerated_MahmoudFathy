@@ -40,6 +40,6 @@ pub mod vault {
 
 #[error_code]
 pub enum ErrorCode {
-    #[msg("Custom error message")]
+    #[msg("Vault: Custom Error")]
     CustomError,
 }

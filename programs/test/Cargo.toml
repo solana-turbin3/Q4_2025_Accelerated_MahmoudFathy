@@ -25,6 +25,7 @@ vault = {path = "../vault/"}
 [dev-dependencies]
 litesvm = "0.6.1"
 litesvm-token = "0.6.1"
+solana-sdk = "2.2.1"
 
 solana-instruction = "2.2.1"
 solana-keypair = "2.2.1"

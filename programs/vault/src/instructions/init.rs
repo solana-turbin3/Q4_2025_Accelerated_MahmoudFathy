@@ -35,7 +35,6 @@ pub struct Init<'info> {
 
 impl<'info> Init<'info> {
     pub fn init_vault(&mut self, bumps: &InitBumps) -> Result<()> {
-
         self.vault.set_inner(Vault {
             admin: self.admin.key(),
             underlying_token: self.underlying_token.key(),

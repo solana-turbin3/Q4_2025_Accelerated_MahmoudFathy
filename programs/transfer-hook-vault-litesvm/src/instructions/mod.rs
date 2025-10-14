@@ -1,3 +1,5 @@
+#[warn(unused_imports)]
+
 pub mod init_extra_account_meta;
 pub mod transfer_hook;
 pub mod mint_token;
