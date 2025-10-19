@@ -50,9 +50,11 @@ pub struct Withdraw<'info> {
 
     /// CHECK: ExtraAccountMetaList PDA of the hook program
     pub extra_account_meta_list: UncheckedAccount<'info>,
-    /// CHECK: Whitelist PDA of the hook program
 
-    pub whitelist: UncheckedAccount<'info>,
+    /// CHECK: Whitelist PDA of the hook program (["whitelist", mint, source])
+    pub source_token_whitelist_state: UncheckedAccount<'info>,
+    /// CHECK: Whitelist PDA of the hook program (["whitelist", mint, destination])
+    pub destination_token_whitelist_state: UncheckedAccount<'info>,
 
     pub token_program: Interface<'info, TokenInterface>,
 
@@ -99,7 +101,8 @@ impl<'info> Withdraw<'info> {
         .with_remaining_accounts(vec![
 
             ctx.accounts.extra_account_meta_list.to_account_info(),
-            ctx.accounts.whitelist.to_account_info(),
+            ctx.accounts.source_token_whitelist_state.to_account_info(),
+            ctx.accounts.destination_token_whitelist_state.to_account_info(),
         ]);
 
         transfer_checked(cpi, amount, ctx.accounts.mint.decimals)

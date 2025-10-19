@@ -2,7 +2,7 @@ use anchor_lang::{
     prelude::*,
 };
 
-use crate::states::RestrictedAccount;
+use crate::states::WhitelistedAccount;
 
 
 #[derive(Accounts)]
@@ -15,38 +15,46 @@ pub struct WhitelistOperations<'info> {
     pub admin: Signer<'info>,
     /// CHECK:
     pub mint: UncheckedAccount<'info>,
-    // At this point anyone can set a vault to be restricted account TODO: Vault Admin only should
     // do that
     #[account(
         init_if_needed,
         payer = admin,
         seeds = [b"whitelist", mint.key().as_ref(), user.key().as_ref()],
-        space = 8 + RestrictedAccount::INIT_SPACE,
+        space = 8 + WhitelistedAccount::INIT_SPACE,
         bump,
     )]
-    pub restricted_account: Account<'info, RestrictedAccount>,
+    pub whitelisted_account: Account<'info, WhitelistedAccount>,
     pub system_program: Program<'info, System>,
 }
 
 
 impl<'info> WhitelistOperations<'info> {
     pub fn add_restricted_account(&mut self, bumps: WhitelistOperationsBumps) -> Result<()> {
-        // Challenge:
-        if !self.restricted_account.is_restricted {
-            self.restricted_account.set_inner(RestrictedAccount {
-                is_restricted: true,
-                bump: bumps.restricted_account
-            });
+        if !self.whitelisted_account.is_restricted {
+            self.whitelisted_account.is_restricted = true;
+            self.whitelisted_account.bump = bumps.whitelisted_account;
         }
         Ok(())
     }
 
-    pub fn remove_restricted_account(&mut self, bumps: WhitelistOperationsBumps) -> Result<()> {
-        if self.restricted_account.is_restricted{
-            self.restricted_account.set_inner(RestrictedAccount{
-                is_restricted: false,
-                bump: bumps.restricted_account
-            });
+    pub fn remove_restricted_account(&mut self, _bumps: WhitelistOperationsBumps) -> Result<()> {
+        if self.whitelisted_account.is_restricted {
+            self.whitelisted_account.is_restricted = false;
+        }
+        Ok(())
+    }
+
+    pub fn add_whitelisted_account(&mut self, bumps: WhitelistOperationsBumps) -> Result<()> {
+        if !self.whitelisted_account.is_whitelisted{
+            self.whitelisted_account.is_whitelisted = true;
+            self.whitelisted_account.bump = bumps.whitelisted_account;
+        }
+        Ok(())
+    }
+
+    pub fn remove_whitelisted_account (&mut self, _bumps: WhitelistOperationsBumps) -> Result<()> {
+        if self.whitelisted_account.is_whitelisted {
+            self.whitelisted_account.is_restricted = false;
         }
         Ok(())
     }

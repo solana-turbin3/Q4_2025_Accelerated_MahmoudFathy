@@ -19,6 +19,15 @@ use anchor_spl::{
 
 use crate::states::*;
 
+
+#[error_code]
+pub enum CustomError {
+    #[msg("TransferHook: User not in whitelist")]
+    UserNotWhitelisted,
+    #[msg("TransferHook: Not transferring")]
+    NotTransferring,
+}
+
 #[derive(Accounts)]
 pub struct TransferHook<'info> {
     #[account(
@@ -43,35 +52,38 @@ pub struct TransferHook<'info> {
 
     #[account(
         seeds = [b"whitelist", mint.key().as_ref(), owner.key().as_ref()], 
-        bump = depositor_whitelist.bump,
+        bump = source_whitelisted_state.bump,
     )]
-    pub depositor_whitelist: Account<'info, RestrictedAccount>,
+    pub source_whitelisted_state: Account<'info, WhitelistedAccount>,
     
     #[account(
         seeds = [b"whitelist",  mint.key().as_ref(), destination_token.owner.as_ref()], 
-        bump = restricted_account.bump,
+        bump = source_whitelisted_state.bump,
     )]
-    pub restricted_account: Account<'info, RestrictedAccount>
+    pub destination_whitelisted_state: Account<'info, WhitelistedAccount>,
+
+
 }
 
 impl<'info> TransferHook<'info> {
     /// This function is called when the transfer hook is executed.
     pub fn transfer_hook(&mut self, _amount: u64) -> Result<()> {
         // Fail this instruction if it is not called from within a transfer hook
-        self.check_is_transferring()?;
-        require!(false, CustomError::NotTransferring);
         // panic!("No Transfer by default");
+        self.check_is_transferring()?;
 
-        // Validate source is not restricted 
-        if self.restricted_account.is_restricted {
-            panic!("Not whitelisted: from");
+        // Validate source is whitelisted 
+        if self.destination_whitelisted_state.is_restricted {
+            if !self.source_whitelisted_state.is_whitelisted {
+                panic!("Transfer Hook: Transfer is blocked - depositor not whitelisted");
+            }
         }
-        
-        // Validate destination is not restricted 
-        if self.depositor_whitelist.is_restricted {
-            panic!("Not whitelisted: to");
+        // Validate source is whitelisted 
+        if self.source_whitelisted_state.is_restricted {
+            if !self.destination_whitelisted_state.is_whitelisted {
+                panic!("Transfer Hook: Transfer is blocked - withdrawer not whitelisted");
+            }
         }
-        
         Ok(())
     }
 
@@ -97,7 +109,6 @@ impl<'info> TransferHook<'info> {
     
         // Check if the account is in the middle of a transfer operation
         if !bool::from(account_extension.transferring) {
-
             panic!("TransferHook: Not transferring");
         }
     
@@ -105,11 +116,3 @@ impl<'info> TransferHook<'info> {
     }
 }
 
-
-#[error_code]
-pub enum CustomError {
-    #[msg("User not whitelisted")]
-    UserNotWhitelisted,
-    #[msg("TransferHook: Not transferring")]
-    NotTransferring,
-}

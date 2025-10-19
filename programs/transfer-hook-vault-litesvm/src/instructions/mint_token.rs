@@ -6,7 +6,7 @@ use anchor_spl::token_interface::{
     TokenInterface,
 };
 
-use crate::states::RestrictedAccount;
+use crate::states::WhitelistedAccount;
 
 #[derive(Accounts)]
 pub struct TokenFactory<'info> {
@@ -31,7 +31,7 @@ pub struct TokenFactory<'info> {
         seeds = [b"whitelist", mint.key().as_ref()], 
         bump
     )]
-    pub blocklist: Account<'info, RestrictedAccount>,
+    pub blocklist: Account<'info, WhitelistedAccount>,
 
     pub system_program: Program<'info, System>,
     pub token_program: Interface<'info, TokenInterface>,

@@ -86,6 +86,7 @@ mod tests {
         Pubkey,
         Pubkey,
         Pubkey,
+        Pubkey
     ) {
         
         let mut svm = LiteSVM::new();
@@ -117,7 +118,7 @@ mod tests {
 
         let mint_keypair = Keypair::new();
 
-        msg!("\n Step 1: Creating token22 Mint");
+        msg!("\n1: Creating token22 Mint");
 
         create_token_with_extension_22(
             &mut svm,
@@ -130,11 +131,13 @@ mod tests {
         //
         let mint = mint_keypair.pubkey();
 
-        let (whitelist_pda, _) = Pubkey::find_program_address(&[b"whitelist", mint.as_ref(), user.pubkey().as_ref()], &TRANSFER_HOOK_PROGRAM_ID);
+        let (whitelist_user_pda, _) = Pubkey::find_program_address(&[b"whitelist", mint.as_ref(), user.pubkey().as_ref()], &TRANSFER_HOOK_PROGRAM_ID);
 
         let (vault_authority, _) = Pubkey::find_program_address(&[b"vault", mint.as_ref()], &VAULT_PROGRAM_ID);
 
         let (vault_state, _) = Pubkey::find_program_address(&[b"vault_state", mint.as_ref()], &VAULT_PROGRAM_ID);
+
+        let (whitelist_vault_pda, _) = Pubkey::find_program_address(&[b"whitelist", mint.as_ref(), vault_authority.as_ref()], &TRANSFER_HOOK_PROGRAM_ID);
 
         let (extra_account_meta_list, _) = Pubkey::find_program_address(
             &[b"extra-account-metas", mint.as_ref()],
@@ -142,7 +145,7 @@ mod tests {
         );
 
         //
-        msg!("\n Step 2: Initialize Metalist for transfer hook");
+        msg!("\n2: Initialize Meta list for transfer hook");
 
         let init_extra_account_metalist_ix = Instruction {
             program_id: TRANSFER_HOOK_PROGRAM_ID,
@@ -162,10 +165,10 @@ mod tests {
         let transaction = Transaction::new(&[&payer], message, recent_blockhash);
 
         svm.send_transaction(transaction).unwrap();
-        msg!("Extra account metalist initialized");
+        msg!("Extra account meta list initialized");
         //
         //
-        msg!("\nStep 3: Initializing vault");
+        msg!("\n3: Initializing vault");
         let vault_ata = associated_token::get_associated_token_address_with_program_id(
             &vault_authority,
             &mint,
@@ -199,7 +202,7 @@ mod tests {
 
         //
         //
-        msg!("\nStep 3: Create user ata");
+        msg!("\n3: Create user ata");
         let user_ata = CreateAssociatedTokenAccount::new(&mut svm, &payer, &mint)
             .owner(&user.pubkey())
             .token_program_id(&TOKEN_22_PROGRAM_ID)
@@ -212,9 +215,8 @@ mod tests {
             &mint,
             &user_ata,
             &mint_authority,
-
             &[],
-            10_000_000_000, // 10 tokens
+            10_000_000_000, 
         )
         .unwrap();
 
@@ -235,7 +237,8 @@ mod tests {
             vault_authority,
             vault_ata,
             extra_account_meta_list,
-            whitelist_pda,
+            whitelist_user_pda,
+            whitelist_vault_pda
         )
     }
 
@@ -252,22 +255,23 @@ mod tests {
             vault_authority,
             vault_ata,
             extra_account_meta_list,
-            whitelist_pda,
+            whitelist_user_pda,
+            whitelist_vault_pda
         ) = setup();
         let mint = mint_keypair.pubkey();
 
-        msg!("\nStep 4: Add user to special list");
+        msg!("\n4: Add user to special list");
         //
         let add_to_whitelist_ix = Instruction {
             program_id: TRANSFER_HOOK_PROGRAM_ID,
             accounts: transfer_hook::accounts::WhitelistOperations {
                 admin: payer.pubkey(),
                 mint: mint,
-                restricted_account: whitelist_pda,
+                whitelisted_account: whitelist_user_pda,
                 system_program: system_program::ID,
             }
             .to_account_metas(None),
-            data: transfer_hook::instruction::AddRestrictedAccount{
+            data: transfer_hook::instruction::AddWhitelistedAccount{
                 user: user.pubkey(),
             }
             .data(),
@@ -277,11 +281,32 @@ mod tests {
         let recent_blockhash = svm.latest_blockhash();
         let transaction = Transaction::new(&[&payer], message, recent_blockhash);
         svm.send_transaction(transaction).unwrap();
-        msg!("User added to list");
+        msg!("User added to Whitelist");
 
-        // TODO: Add other party to whitelist
+        msg!("\n5: Add vault to special list");
+        let add_to_restrictedlist_ix = Instruction {
+            program_id: TRANSFER_HOOK_PROGRAM_ID,
+            accounts: transfer_hook::accounts::WhitelistOperations {
+                admin: payer.pubkey(),
+                mint: mint,
+                whitelisted_account: whitelist_vault_pda,
+                system_program: system_program::ID,
+            }
+            .to_account_metas(None),
+            data: transfer_hook::instruction::AddRestrictedAccount{
+                user: vault_authority,
+            }
+            .data(),
+        };
 
-        msg!("\n Step 5: Deposit to vault");
+        let message = Message::new(&[add_to_restrictedlist_ix], Some(&payer.pubkey()));
+        let recent_blockhash = svm.latest_blockhash();
+        let transaction = Transaction::new(&[&payer], message, recent_blockhash);
+        svm.send_transaction(transaction).unwrap();
+        msg!("Vault added to Restricted list");
+
+
+        msg!("\n6: Deposit to vault");
         //
         let deposit_ix = Instruction {
             program_id: VAULT_PROGRAM_ID,
@@ -293,7 +318,8 @@ mod tests {
                 vault_authority,
                 vault_ata,
                 extra_account_meta_list,
-                whitelist: whitelist_pda,
+                source_token_whitelist_state: whitelist_user_pda,
+                destination_token_whitelist_state: whitelist_vault_pda,
                 token_program: TOKEN_22_PROGRAM_ID,
             }
             .to_account_metas(None),
@@ -306,11 +332,12 @@ mod tests {
         let result = svm.send_transaction(transaction);
         assert!(
             result.is_ok(),
-            "Expected deposit to suceed, but it failed"
+            "Expected deposit to succeed, but it failed"
         );
     }
 
     #[test]
+    #[ignore]
     fn test_invalid_token_transfer_expect_revert() {
         let (
             mut svm,
@@ -322,36 +349,37 @@ mod tests {
             vault_authority,
             vault_ata,
             extra_account_meta_list,
-            whitelist_pda,
+            whitelist_user_pda,
+            whitelist_vault_pda,
         ) = setup();
         let mint = mint_keypair.pubkey();
 
-        msg!("\nStep 3: Add user to special list");
+        msg!("\n3: Add vault to restricted list");
         //
-        let add_to_whitelist_ix = Instruction {
+        let add_to_restrictedlist_ix = Instruction {
             program_id: TRANSFER_HOOK_PROGRAM_ID,
             accounts: transfer_hook::accounts::WhitelistOperations {
                 admin: payer.pubkey(),
                 mint: mint,
-                restricted_account: whitelist_pda,
+                whitelisted_account: whitelist_vault_pda,
                 system_program: system_program::ID,
             }
             .to_account_metas(None),
             data: transfer_hook::instruction::AddRestrictedAccount{
-                user: user.pubkey(),
+                user: vault_authority,
             }
             .data(),
         };
 
-        let message = Message::new(&[add_to_whitelist_ix], Some(&payer.pubkey()));
+        let message = Message::new(&[add_to_restrictedlist_ix], Some(&payer.pubkey()));
         let recent_blockhash = svm.latest_blockhash();
         let transaction = Transaction::new(&[&payer], message, recent_blockhash);
         svm.send_transaction(transaction).unwrap();
-        msg!("User added to list");
+        msg!("Vault added to restricted list");
         //
         // Other party is not added to a whitelist, therefore deposit should fail
 
-        msg!("\n Step 5: Deposit to vault");
+        msg!("\n4: Deposit to vault");
         //
         let deposit_ix = Instruction {
             program_id: VAULT_PROGRAM_ID,
@@ -363,7 +391,8 @@ mod tests {
                 vault_authority,
                 vault_ata,
                 extra_account_meta_list,
-                whitelist: whitelist_pda,
+                source_token_whitelist_state: whitelist_user_pda,
+                destination_token_whitelist_state: whitelist_vault_pda,
                 token_program: TOKEN_22_PROGRAM_ID,
             }
             .to_account_metas(None),

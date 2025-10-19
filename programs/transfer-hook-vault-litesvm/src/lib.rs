@@ -30,6 +30,13 @@ pub mod transfer_hook_vault_litesvm {
         ctx.accounts.remove_restricted_account(ctx.bumps)
     }
 
+    pub fn add_whitelisted_account(ctx: Context<WhitelistOperations>, user: Pubkey) -> Result<()> {
+        ctx.accounts.add_whitelisted_account(ctx.bumps)
+    }
+    pub fn remove_whitelisted_account(ctx: Context<WhitelistOperations>, user: Pubkey) -> Result<()> {
+        ctx.accounts.remove_whitelisted_account(ctx.bumps)
+    }
+
     pub fn init_mint(ctx: Context<TokenFactory>, decimals: u8, mint_authority: Pubkey) -> Result<()> {
         ctx.accounts.init_mint(&ctx.bumps, decimals, mint_authority)
     }

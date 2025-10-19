@@ -28,46 +28,43 @@ pub struct InitializeExtraAccountMetaList<'info> {
 
 impl<'info> InitializeExtraAccountMetaList<'info> {
     pub fn extra_account_metas() -> Result<Vec<ExtraAccountMeta>> {
+        // Passed by transfer:  [0] source token, [1] mint, [2] destination token, [3] source authority
         Ok(
             vec![
+                // Source Token
                 ExtraAccountMeta::new_with_seeds(
                     &[
                         Seed::Literal {
                             bytes: b"whitelist".to_vec(),
                         },
                         Seed::AccountKey{ 
-                            index: 1
+                            index: 1             // mint
                         },  // 
+                        Seed::AccountKey { 
+                            index: 3,
+                        },  // Should refer to depositor PubKey on deposit  [source]
                     ],
                     false, // is_signer
                     false // is_writable
                 )?,
+                // Destination Token
                 ExtraAccountMeta::new_with_seeds(
                     &[
                         Seed::Literal {
                             bytes: b"whitelist".to_vec(),
                         },
+                        Seed::AccountKey{ 
+                            index: 1             // mint
+                        },  // 
                         Seed::AccountData { 
                             account_index: 2,
                             data_index: 32,
                             length: 32,
-                        },  // Should refer to vault pubkey on deposit
+                        },  // Should refer to vault pubkey on deposit  [destination]
                     ],
                     false, // is_signer
                     false // is_writable
                 )?,
-                ExtraAccountMeta::new_with_seeds(
-                    &[
-                        Seed::Literal {
-                            bytes: b"whitelist".to_vec(),
-                        },
-                        Seed::AccountKey { 
-                            index: 3,
-                        },  // Should refer to depositor PubKey on deposit 
-                    ],
-                    false, // is_signer
-                    false // is_writable
-                )?
             ]
         )
     }
