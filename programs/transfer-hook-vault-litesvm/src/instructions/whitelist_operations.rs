@@ -6,19 +6,21 @@ use crate::states::RestrictedAccount;
 
 
 #[derive(Accounts)]
-#[instruction(vault: Pubkey)]
+#[instruction(user: Pubkey)]
 pub struct WhitelistOperations<'info> {
     #[account(
         mut,
         //address = 
     )]
     pub admin: Signer<'info>,
+    /// CHECK:
+    pub mint: UncheckedAccount<'info>,
     // At this point anyone can set a vault to be restricted account TODO: Vault Admin only should
     // do that
     #[account(
         init_if_needed,
         payer = admin,
-        seeds = [b"restricted_account", vault.key().as_ref()],
+        seeds = [b"whitelist", mint.key().as_ref(), user.key().as_ref()],
         space = 8 + RestrictedAccount::INIT_SPACE,
         bump,
     )]

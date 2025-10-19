@@ -18,20 +18,20 @@ use spl_transfer_hook_interface::{
 };
 use spl_tlv_account_resolution::state::ExtraAccountMetaList;
 
-declare_id!("7Gr1P7a5qfW787qL4x5y7zRqx5nrRk2GyTmLXJLpcyJo");
+declare_id!("3ZktYLqFLBuLdzsnH66siTLjZctKzj1aZHvG9KWyaF1x");
 
 #[program]
 pub mod transfer_hook_vault_litesvm {
     use super::*;
-    pub fn add_restricted_account(ctx: Context<WhitelistOperations>, vault: Pubkey) -> Result<()> {
+    pub fn add_restricted_account(ctx: Context<WhitelistOperations>, user: Pubkey) -> Result<()> {
         ctx.accounts.add_restricted_account(ctx.bumps)
     }
-    pub fn remove_restricted_account(ctx: Context<WhitelistOperations>, vault: Pubkey) -> Result<()> {
+    pub fn remove_restricted_account(ctx: Context<WhitelistOperations>, user: Pubkey) -> Result<()> {
         ctx.accounts.remove_restricted_account(ctx.bumps)
     }
 
-    pub fn init_mint(ctx: Context<TokenFactory>) -> Result<()> {
-        ctx.accounts.init_mint(&ctx.bumps)
+    pub fn init_mint(ctx: Context<TokenFactory>, decimals: u8, mint_authority: Pubkey) -> Result<()> {
+        ctx.accounts.init_mint(&ctx.bumps, decimals, mint_authority)
     }
 
     #[instruction(discriminator = InitializeExtraAccountMetaListInstruction::SPL_DISCRIMINATOR_SLICE)]

@@ -42,13 +42,13 @@ pub struct TransferHook<'info> {
     pub extra_account_meta_list: UncheckedAccount<'info>,
 
     #[account(
-        seeds = [b"restricted_account", owner.key().as_ref()], 
+        seeds = [b"whitelist", mint.key().as_ref(), owner.key().as_ref()], 
         bump = depositor_whitelist.bump,
     )]
     pub depositor_whitelist: Account<'info, RestrictedAccount>,
     
     #[account(
-        seeds = [b"restricted_account", destination_token.owner.as_ref()], 
+        seeds = [b"whitelist",  mint.key().as_ref(), destination_token.owner.as_ref()], 
         bump = restricted_account.bump,
     )]
     pub restricted_account: Account<'info, RestrictedAccount>
@@ -59,6 +59,8 @@ impl<'info> TransferHook<'info> {
     pub fn transfer_hook(&mut self, _amount: u64) -> Result<()> {
         // Fail this instruction if it is not called from within a transfer hook
         self.check_is_transferring()?;
+        require!(false, CustomError::NotTransferring);
+        // panic!("No Transfer by default");
 
         // Validate source is not restricted 
         if self.restricted_account.is_restricted {
@@ -101,4 +103,13 @@ impl<'info> TransferHook<'info> {
     
         Ok(())
     }
+}
+
+
+#[error_code]
+pub enum CustomError {
+    #[msg("User not whitelisted")]
+    UserNotWhitelisted,
+    #[msg("TransferHook: Not transferring")]
+    NotTransferring,
 }

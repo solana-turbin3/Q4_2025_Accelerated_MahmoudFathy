@@ -6,7 +6,7 @@ use anchor_spl::token_interface::{
     TokenInterface,
 };
 
-// use crate::states::RestrictedAccount;
+use crate::states::RestrictedAccount;
 
 #[derive(Accounts)]
 pub struct TokenFactory<'info> {
@@ -15,6 +15,7 @@ pub struct TokenFactory<'info> {
     #[account(
         init,
         payer = user,
+        mint::token_program = token_program,
         mint::decimals = 9,
         mint::authority = user,
         extensions::transfer_hook::authority = user,
@@ -26,18 +27,23 @@ pub struct TokenFactory<'info> {
     #[account(mut)]
     pub extra_account_meta_list: UncheckedAccount<'info>,
 
-    // #[account(
-    //     seeds = [b"whitelist"], 
-    //     bump
-    // )]
-    // pub blocklist: Account<'info, RestrictedAccount>,
+    #[account(
+        seeds = [b"whitelist", mint.key().as_ref()], 
+        bump
+    )]
+    pub blocklist: Account<'info, RestrictedAccount>,
 
     pub system_program: Program<'info, System>,
     pub token_program: Interface<'info, TokenInterface>,
 }
 
 impl<'info> TokenFactory<'info> {
-    pub fn init_mint(&mut self, _bumps: &TokenFactoryBumps) -> Result<()> {
+    pub fn init_mint(
+        &mut self,
+        _bumps: &TokenFactoryBumps,
+        _decimals: u8,
+        _mint_authority: Pubkey,
+    ) -> Result<()> {
         Ok(())
     }
 }

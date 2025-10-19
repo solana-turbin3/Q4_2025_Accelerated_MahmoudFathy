@@ -1,279 +1,384 @@
 #[cfg(test)]
-mod test {
+#[allow(deprecated)]
+mod tests {
     use {
-        anchor_lang::{prelude::msg, AccountDeserialize, InstructionData, ToAccountMetas}, anchor_spl::{
-            associated_token::{self, spl_associated_token_account},
-            token::Mint,
-            token_interface::TokenAccount,
-        }, litesvm::{types::{FailedTransactionMetadata, TransactionMetadata}, LiteSVM}, litesvm_token::{
-            spl_token::ID as TOKEN_PROGRAM_ID, CreateAssociatedTokenAccount, CreateMint, MintTo,
-        }, solana_account::Account, solana_instruction::Instruction, solana_keypair::Keypair, solana_message::Message, solana_native_token::LAMPORTS_PER_SOL, solana_pubkey::Pubkey, solana_sdk::compute_budget, solana_sdk_ids::system_program::ID as SYSTEM_PROGRAM_ID, solana_signer::Signer, solana_transaction::Transaction, spl_token_2022::instruction::{initialize_mint2, mint_to}, std::{path::PathBuf, str::FromStr}, transfer_hook_vault_litesvm as transfer_hook
+        anchor_lang::{
+            prelude::msg,
+            InstructionData,
+            ToAccountMetas,
+        },
+        anchor_spl::{
+            associated_token,
+        },
+        solana_sdk::{
+            instruction::{Instruction},
+            transaction::Transaction,
+            pubkey::Pubkey,
+            message::Message,
+            signature::{Keypair, Signer},
+            native_token::LAMPORTS_PER_SOL,
+            system_instruction,
+            hash::Hash,
+            system_program,
+        },
+        litesvm::LiteSVM,
+        litesvm_token::{
+            CreateAssociatedTokenAccount
+        },
+        solana_program_pack::Pack,
+        spl_token_2022::{
+            instruction::initialize_mint2,
+            ID as TOKEN_22_PROGRAM_ID,
+        },
+        std::path::PathBuf,
+
+        transfer_hook_vault_litesvm as transfer_hook,
     };
-    
-    static ASSOCIATED_TOKEN_PROGRAM_ID: &str = "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL";
-    static TRANSFER_HOOK_PROGRAM_ID: Pubkey = transfer_hook_vault_litesvm::ID;
+
+    static TRANSFER_HOOK_PROGRAM_ID: Pubkey = transfer_hook::ID;
     static VAULT_PROGRAM_ID: Pubkey = vault::ID;
-
-    fn send_signed_transaction(
-        program: &mut LiteSVM,
+    
+    fn create_token_with_extension_22(
+        svm: &mut LiteSVM,
         payer: &Keypair,
-        ix: Instruction,
-        signers: Option<&Keypair>,
-    ) -> Result<TransactionMetadata, FailedTransactionMetadata> {
-        let message = Message::new(&[ix], Some(&payer.pubkey()));
-        let recent_blockhash = program.latest_blockhash();
-        let tx = match signers {
-            Some(ks) => {
-                Transaction::new(&[&payer, &ks], message, recent_blockhash)
-            }
-            None => {
-                Transaction::new(&[payer], message, recent_blockhash)
-            }
-        };
-        program.send_transaction(tx)
+        mint: &Keypair,
+        mint_authority: &Pubkey,
+        decimals: u8,
+    ) -> Result<(), String> {
+        let minimum_required_rent = svm.minimum_balance_for_rent_exemption(spl_token_2022::state::Mint::LEN);
+        let create_account_instruction = system_instruction::create_account(
+            &payer.pubkey(),
+            &mint.pubkey(),
+            minimum_required_rent,
+            spl_token_2022::state::Mint::LEN as u64,
+            &TOKEN_22_PROGRAM_ID,
+        );
+        let init_mint_instruction = initialize_mint2(
+            &TOKEN_22_PROGRAM_ID,
+            &mint.pubkey(),
+            mint_authority,
+            None,
+            decimals,
+        ).unwrap();
+
+
+        let message = Message::new(
+            &[create_account_instruction, init_mint_instruction],
+            Some(&payer.pubkey()),
+        );
+        let recent_blockhash = svm.latest_blockhash();
+        let transaction = Transaction::new(&[payer, mint], message, Hash::from(recent_blockhash.to_bytes()) );
+        
+        svm.send_transaction(  transaction )
+            .expect("Failed to send transaction create token 2022");
+
+        Ok(())
     }
 
-    fn init_vault(program: &mut LiteSVM, payer: &Keypair, collateral: &Pubkey) -> (Pubkey) {
-        let bin_filepath =
+    fn setup() -> (
+        LiteSVM,
+        Keypair,
+        Keypair,
+        Keypair,
+        Pubkey,
+        Pubkey,
+        Pubkey,
+        Pubkey,
+        Pubkey,
+        Pubkey,
+    ) {
+        
+        let mut svm = LiteSVM::new();
+        let payer = Keypair::new();
+
+        svm.airdrop(&payer.pubkey(), 8 * LAMPORTS_PER_SOL)
+            .expect("Airdrop Failed!!");
+
+        let transfer_hook_so_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../target/deploy/transfer_hook_vault_litesvm.so");
+        let transfer_hook_data =
+            std::fs::read(transfer_hook_so_path).expect("Failed to read transfer_hook SO file");
+        svm.add_program(TRANSFER_HOOK_PROGRAM_ID, &transfer_hook_data)
+            .expect("Failed to add transfer_hook program");
+
+        let vault_so_path =
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/deploy/vault.so");
-        let vault_so = std::fs::read(bin_filepath).expect("Failed to read .so file");
-        program.add_program(VAULT_PROGRAM_ID, &vault_so);
+        let vault_data = std::fs::read(vault_so_path).expect("Failed to read week1_challenge SO file");
+        svm.add_program(VAULT_PROGRAM_ID, &vault_data)
+            .expect("Failed to add week1_challenge program");
+        
 
-        let vault: Pubkey = Pubkey::find_program_address(&[b"vault"], &VAULT_PROGRAM_ID).0;
+        // Initialize Accounts
+        let mint_authority = payer.pubkey();
+        let user = Keypair::new();
 
-        let vault_underlying_ata: Pubkey =
-            associated_token::get_associated_token_address_with_program_id(
-                &vault,
-                &*collateral,
-                &spl_token_2022::id(),
-            );
+        svm.airdrop(&user.pubkey(), 2 * LAMPORTS_PER_SOL)
+            .expect("Airdrop Failed!!");
 
+        let mint_keypair = Keypair::new();
 
-        let init_ix = Instruction {
-            program_id: VAULT_PROGRAM_ID,
-            accounts: vault::accounts::Init {
-                admin: payer.pubkey(),
-                underlying_token: collateral.to_owned(),
-                vault,
-                vault_underlying_ata,
-                associated_token_program: Pubkey::from_str(ASSOCIATED_TOKEN_PROGRAM_ID).unwrap(),
+        msg!("\n Step 1: Creating token22 Mint");
 
-                token_program: spl_token_2022::ID,
-                system_program: SYSTEM_PROGRAM_ID,
-            }
-            .to_account_metas(None),
-            data: vault::instruction::InitVault {}.data(),
-        };
+        create_token_with_extension_22(
+            &mut svm,
+            &payer,
+            &mint_keypair,
+            &mint_authority,
+            9,
+        )
+        .expect("Failed to create Token22 with Extension");
+        //
+        let mint = mint_keypair.pubkey();
 
-        send_signed_transaction(program, &payer, init_ix, None);
-        vault
-    }
+        let (whitelist_pda, _) = Pubkey::find_program_address(&[b"whitelist", mint.as_ref(), user.pubkey().as_ref()], &TRANSFER_HOOK_PROGRAM_ID);
 
-    fn init_token_ext_program(
-        program: &mut LiteSVM,
-        payer: &Keypair,
-        user: Pubkey,
-        token_collateral: &Keypair,
-        vault: Pubkey,
-    ) -> (Pubkey, Pubkey) {
-        let bin_filepath =
-            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/deploy/transfer_hook_vault_litesvm.so");
-        let transfer_hook_program = std::fs::read(bin_filepath).expect("Failed to read .so file");
-        program.add_program(TRANSFER_HOOK_PROGRAM_ID, &transfer_hook_program);
+        let (vault_authority, _) = Pubkey::find_program_address(&[b"vault", mint.as_ref()], &VAULT_PROGRAM_ID);
 
-        // Init the extra account meta list
+        let (vault_state, _) = Pubkey::find_program_address(&[b"vault_state", mint.as_ref()], &VAULT_PROGRAM_ID);
 
-        let extra_account_meta_list = Pubkey::find_program_address(
-            &[b"extra-account-metas", token_collateral.pubkey().as_ref()],
+        let (extra_account_meta_list, _) = Pubkey::find_program_address(
+            &[b"extra-account-metas", mint.as_ref()],
             &TRANSFER_HOOK_PROGRAM_ID,
-        ).0;
+        );
 
-        let ix = Instruction {
-            program_id: TRANSFER_HOOK_PROGRAM_ID,
-            accounts: transfer_hook::accounts::TokenFactory {
-                user: payer.pubkey(),
-                mint: token_collateral.pubkey(),
-                extra_account_meta_list,
-                system_program: SYSTEM_PROGRAM_ID,
-                token_program: spl_token_2022::ID,
+        //
+        msg!("\n Step 2: Initialize Metalist for transfer hook");
 
-            }
-            .to_account_metas(None),
-            data: transfer_hook::instruction::InitMint {}.data(),
-        };
-        send_signed_transaction(program, payer, ix, Some(&token_collateral));
-
-        let ix = Instruction {
+        let init_extra_account_metalist_ix = Instruction {
             program_id: TRANSFER_HOOK_PROGRAM_ID,
             accounts: transfer_hook::accounts::InitializeExtraAccountMetaList {
                 payer: payer.pubkey(),
                 extra_account_meta_list,
-                mint: token_collateral.pubkey(),
-                system_program: SYSTEM_PROGRAM_ID,
+                mint,
+                system_program: system_program::ID,
             }
             .to_account_metas(None),
             data: transfer_hook::instruction::InitializeTransferHook {}.data(),
+
         };
-        send_signed_transaction(program, payer, ix, None);
-
-        let whitelist =
-            Pubkey::find_program_address(&[b"restricted_account", user.as_ref()], &TRANSFER_HOOK_PROGRAM_ID).0;
-
-
-        // let ix = Instruction {
-        //     program_id: TRANSFER_HOOK_PROGRAM_ID,
-        //     accounts: transfer_hook::accounts::InitializeWhitelist {
-        //         admin: payer.pubkey(),
         //
-        //         whitelist,
-        //         system_program: SYSTEM_PROGRAM_ID,
-        //     }
-        //     .to_account_metas(None),
-        //     data: transfer_hook::instruction::InitializeWhitelist { token_owner: user }.data(),
-        // };
+        let message = Message::new(&[init_extra_account_metalist_ix], Some(&payer.pubkey()));
+        let recent_blockhash = svm.latest_blockhash();
+        let transaction = Transaction::new(&[&payer], message, recent_blockhash);
+
+        svm.send_transaction(transaction).unwrap();
+        msg!("Extra account metalist initialized");
         //
-        // send_ix_in_tx(program, payer, ix, None);
         //
-        // let ix = Instruction {
-        //     program_id: TRANSFER_HOOK_PROGRAM_ID,
-        //     accounts: transfer_hook::accounts::WhitelistOperations {
-        //         admin: payer.pubkey(),
-        //         restricted_account: whitelist,
-        //         system_program: SYSTEM_PROGRAM_ID,
-        //     }
-        //     .to_account_metas(None),
-        //     data: transfer_hook::instruction::AddRestrictedAccount { vault: user }.data(),
-        // };
-        // send_signed_transaction(program, payer, ix, None);
+        msg!("\nStep 3: Initializing vault");
+        let vault_ata = associated_token::get_associated_token_address_with_program_id(
+            &vault_authority,
+            &mint,
+            &TOKEN_22_PROGRAM_ID,
+        );
 
-        // Return the LiteSVM instance and payer keypair
-        (extra_account_meta_list, whitelist)
-    }
+        let create_vault_ix = Instruction {
+            program_id: VAULT_PROGRAM_ID,
+            accounts: vault::accounts::InitializeVault {
+                payer: payer.pubkey(),
+                vault_authority,
+                vault_state,
+                mint,
+                vault_ata,
+                token_program: TOKEN_22_PROGRAM_ID,
+                associated_token_program: associated_token::ID,
+                system_program: system_program::ID,
+            }
+            .to_account_metas(None),
+            data: vault::instruction::Initialize {
+                owner: payer.pubkey(),
+            }
+            .data(),
+        };
+        //
+        let message = Message::new(&[create_vault_ix], Some(&payer.pubkey()));
+        let recent_blockhash = svm.latest_blockhash();
+        let transaction = Transaction::new(&[&payer], message, recent_blockhash);
+        svm.send_transaction(transaction).unwrap();
+        msg!("Vault created");
 
-    fn do_deposit(
-        payer: &Keypair,
-        user: &Keypair,
-        program: &mut LiteSVM,
-        collateral: Pubkey,
-        amount: u64,
-        extra_account_meta_list: Pubkey,
-        whitelist: Pubkey,
-    ) -> (Pubkey, Pubkey) {
-        // User deposits collateral token into vault
-        let vault = Pubkey::find_program_address(&[b"vault"], &VAULT_PROGRAM_ID).0;
-        let vault_underlying_ata: Pubkey =
-            associated_token::get_associated_token_address_with_program_id(
-                &vault,
-                &collateral,
-                &spl_token_2022::id(),
-            );
-        let user_underlying_ata: Pubkey =
-            CreateAssociatedTokenAccount::new(program, &user, &collateral)
-                .token_program_id(&spl_token_2022::ID)
-                .owner(&user.pubkey())
-                .send()
-                .unwrap();
+        //
+        //
+        msg!("\nStep 3: Create user ata");
+        let user_ata = CreateAssociatedTokenAccount::new(&mut svm, &payer, &mint)
+            .owner(&user.pubkey())
+            .token_program_id(&TOKEN_22_PROGRAM_ID)
+            .send()
+            .expect("Failed to create user ATA");
 
-        let ix = mint_to(
-            &spl_token_2022::id(),
-            &collateral,    // mint
-            &user_underlying_ata, // destination ATA
-            &payer.pubkey(),      // authority
-            &[],                  // no multisig signers
-            amount,               // amount
+        // Mint tokens to user
+        let fund_user_ix = spl_token_2022::instruction::mint_to(
+            &TOKEN_22_PROGRAM_ID,
+            &mint,
+            &user_ata,
+            &mint_authority,
+
+            &[],
+            10_000_000_000, // 10 tokens
         )
         .unwrap();
 
-        send_signed_transaction(program, &payer, ix, None);
+        //
+        let message = Message::new(&[fund_user_ix], Some(&payer.pubkey()));
+        let recent_blockhash = svm.latest_blockhash();
 
-        let init_ix = Instruction {
-            program_id: VAULT_PROGRAM_ID,
-            accounts: vault::accounts::Deposit {
-                user: user.pubkey(),
-                underlying_token: collateral,
-                vault,
-                vault_underlying_ata,
-                extra_account_meta_list,
-                whitelist,
-                user_underlying_ata,
-                transfer_hook_program: TRANSFER_HOOK_PROGRAM_ID,
-                associated_token_program: spl_associated_token_account::ID,
-                token_program: spl_token_2022::ID,
-
-                system_program: SYSTEM_PROGRAM_ID,
-
-            }
-            .to_account_metas(None),
-            data: vault::instruction::Deposit { amount }.data(),
-        };
-
-        send_signed_transaction(program, &user, init_ix, None);
-
-        (user_underlying_ata, vault_underlying_ata)
-    }
-
-    fn setup() -> (LiteSVM, Keypair, Keypair, Pubkey, Pubkey, Pubkey, Pubkey) {
-        // Initialize LiteSVM and payer
-        let mut program = LiteSVM::new();
-        // Set a custom compute unit limit for the next transaction
-        // FIXME: Attempt to fix compute limit issue on test run 
-        // program.with_compute_budget(|c: compute_budget::ComputeBudgetInstruction| {
-        //     c.set_compute_unit_limit(1_000_000); // 1 million CUs
-        // });
-        let payer = Keypair::new();
-        let user = Keypair::new();
-        let underlying_token_keypair = Keypair::new();
-
-        // Airdrop some SOL to the payer keypair
-
-        program
-            .airdrop(&payer.pubkey(), 10 * LAMPORTS_PER_SOL)
-            .expect("Failed to airdrop SOL to payer");
-
-
-        program
-            .airdrop(&user.pubkey(), 10 * LAMPORTS_PER_SOL)
-            .expect("Failed to airdrop SOL to user");
-
-        let (vault, _vault_bump) = Pubkey::find_program_address(&[b"vault"], &VAULT_PROGRAM_ID);
-        
-        let (extra_account_meta_list, whitelist) = init_token_ext_program(
-            &mut program,
-            &payer,
-            user.pubkey(),
-            &underlying_token_keypair,
-            vault,
-        );
-        
-        // FIXME: Test failes here due to compute limit
-        let vault = init_vault(&mut program, &payer, &underlying_token_keypair.pubkey()); 
-
-        // Return the LiteSVM instance and payer keypair
-        (
-            program,
+        let transaction = Transaction::new(&[&payer], message, recent_blockhash);
+        svm.send_transaction(transaction).unwrap();
+        msg!("Minted tokens to user");
+        ( 
+            svm,
             payer,
             user,
-            underlying_token_keypair.pubkey(),
-            vault,
+            mint_keypair,
+            vault_state,
+            user_ata,
+            vault_authority,
+            vault_ata,
             extra_account_meta_list,
-            whitelist,
+            whitelist_pda,
         )
     }
 
+
     #[test]
-    fn test_deposit() {
-        let (mut program, payer, user, underlying_token, vault, extra_account_meta_list, whitelist ) =
-            setup();
-        let amount = 1_000_000u64;
-        let (user_underlying_ata, vault_underlying_ata) = do_deposit(
-            &payer,
-            &user,
-            &mut program,
-            underlying_token,
-            amount,
+    fn test_valid_token_transfer() {
+        let (
+            mut svm,
+            payer,
+            user,
+            mint_keypair,
+            vault_state,
+            user_ata,
+            vault_authority,
+            vault_ata,
             extra_account_meta_list,
-            whitelist,
+            whitelist_pda,
+        ) = setup();
+        let mint = mint_keypair.pubkey();
+
+        msg!("\nStep 4: Add user to special list");
+        //
+        let add_to_whitelist_ix = Instruction {
+            program_id: TRANSFER_HOOK_PROGRAM_ID,
+            accounts: transfer_hook::accounts::WhitelistOperations {
+                admin: payer.pubkey(),
+                mint: mint,
+                restricted_account: whitelist_pda,
+                system_program: system_program::ID,
+            }
+            .to_account_metas(None),
+            data: transfer_hook::instruction::AddRestrictedAccount{
+                user: user.pubkey(),
+            }
+            .data(),
+        };
+
+        let message = Message::new(&[add_to_whitelist_ix], Some(&payer.pubkey()));
+        let recent_blockhash = svm.latest_blockhash();
+        let transaction = Transaction::new(&[&payer], message, recent_blockhash);
+        svm.send_transaction(transaction).unwrap();
+        msg!("User added to list");
+
+        // TODO: Add other party to whitelist
+
+        msg!("\n Step 5: Deposit to vault");
+        //
+        let deposit_ix = Instruction {
+            program_id: VAULT_PROGRAM_ID,
+            accounts: vault::accounts::Deposit {
+                user: user.pubkey(),
+                vault_state,
+                mint,
+                user_ata,
+                vault_authority,
+                vault_ata,
+                extra_account_meta_list,
+                whitelist: whitelist_pda,
+                token_program: TOKEN_22_PROGRAM_ID,
+            }
+            .to_account_metas(None),
+            data: vault::instruction::Deposit { amount: 1_000_000_000 }.data(),
+        };
+        //
+        let message = Message::new(&[deposit_ix], Some(&user.pubkey()));
+        let recent_blockhash = svm.latest_blockhash();
+        let transaction = Transaction::new(&[&user], message, recent_blockhash);
+        let result = svm.send_transaction(transaction);
+        assert!(
+            result.is_ok(),
+            "Expected deposit to suceed, but it failed"
+        );
+    }
+
+    #[test]
+    fn test_invalid_token_transfer_expect_revert() {
+        let (
+            mut svm,
+            payer,
+            user,
+            mint_keypair,
+            vault_state,
+            user_ata,
+            vault_authority,
+            vault_ata,
+            extra_account_meta_list,
+            whitelist_pda,
+        ) = setup();
+        let mint = mint_keypair.pubkey();
+
+        msg!("\nStep 3: Add user to special list");
+        //
+        let add_to_whitelist_ix = Instruction {
+            program_id: TRANSFER_HOOK_PROGRAM_ID,
+            accounts: transfer_hook::accounts::WhitelistOperations {
+                admin: payer.pubkey(),
+                mint: mint,
+                restricted_account: whitelist_pda,
+                system_program: system_program::ID,
+            }
+            .to_account_metas(None),
+            data: transfer_hook::instruction::AddRestrictedAccount{
+                user: user.pubkey(),
+            }
+            .data(),
+        };
+
+        let message = Message::new(&[add_to_whitelist_ix], Some(&payer.pubkey()));
+        let recent_blockhash = svm.latest_blockhash();
+        let transaction = Transaction::new(&[&payer], message, recent_blockhash);
+        svm.send_transaction(transaction).unwrap();
+        msg!("User added to list");
+        //
+        // Other party is not added to a whitelist, therefore deposit should fail
+
+        msg!("\n Step 5: Deposit to vault");
+        //
+        let deposit_ix = Instruction {
+            program_id: VAULT_PROGRAM_ID,
+            accounts: vault::accounts::Deposit {
+                user: user.pubkey(),
+                vault_state,
+                mint,
+                user_ata,
+                vault_authority,
+                vault_ata,
+                extra_account_meta_list,
+                whitelist: whitelist_pda,
+                token_program: TOKEN_22_PROGRAM_ID,
+            }
+            .to_account_metas(None),
+            data: vault::instruction::Deposit { amount: 1_000_000_000 }.data(),
+        };
+        //
+        let message = Message::new(&[deposit_ix], Some(&user.pubkey()));
+        let recent_blockhash = svm.latest_blockhash();
+        let transaction = Transaction::new(&[&user], message, recent_blockhash);
+        let result = svm.send_transaction(transaction);
+        assert!(
+            result.is_err(),
+            "Expected deposit to fail for restricted vault, but it succeeded"
         );
     }
 
 }
+

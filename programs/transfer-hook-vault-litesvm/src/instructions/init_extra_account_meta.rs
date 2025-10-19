@@ -33,7 +33,19 @@ impl<'info> InitializeExtraAccountMetaList<'info> {
                 ExtraAccountMeta::new_with_seeds(
                     &[
                         Seed::Literal {
-                            bytes: b"restricted_account".to_vec(),
+                            bytes: b"whitelist".to_vec(),
+                        },
+                        Seed::AccountKey{ 
+                            index: 1
+                        },  // 
+                    ],
+                    false, // is_signer
+                    false // is_writable
+                )?,
+                ExtraAccountMeta::new_with_seeds(
+                    &[
+                        Seed::Literal {
+                            bytes: b"whitelist".to_vec(),
                         },
                         Seed::AccountData { 
                             account_index: 2,
@@ -47,7 +59,7 @@ impl<'info> InitializeExtraAccountMetaList<'info> {
                 ExtraAccountMeta::new_with_seeds(
                     &[
                         Seed::Literal {
-                            bytes: b"restricted_account".to_vec(),
+                            bytes: b"whitelist".to_vec(),
                         },
                         Seed::AccountKey { 
                             index: 3,
