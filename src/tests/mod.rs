@@ -14,7 +14,7 @@ mod tests {
     use solana_signer::Signer;
     use solana_transaction::Transaction;
 
-    const PROGRAM_ID: &str = "4ibrEMW5F6hKnkW4jVedswYv6H6VtwPN6ar6dvXDN1nT";
+    const PROGRAM_ID: &str = "RURxJrgqHSoJgqFbHyntxm1VSZxZugEveRewzvjVm5V";
     const TOKEN_PROGRAM_ID: Pubkey = spl_token::ID;
     const ASSOCIATED_TOKEN_PROGRAM_ID: &str = "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL";
     
@@ -33,7 +33,7 @@ mod tests {
 
         // Load program SO file
         msg!("The path is!! {}", env!("CARGO_MANIFEST_DIR"));
-        let so_path = PathBuf::from("/Users/andrecorreia/Documents/Solana/pinocchio-escrow-2025/escrow/target/sbf-solana-solana/release/escrow.so");
+        let so_path = PathBuf::from("./target/sbf-solana-solana/release/escrow.so");
         msg!("The path is!! {:?}", so_path);
     
         let program_data = std::fs::read(so_path).expect("Failed to read program SO file");

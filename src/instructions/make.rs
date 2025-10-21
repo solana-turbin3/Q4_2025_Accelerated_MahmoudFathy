@@ -28,6 +28,10 @@ pub fn process_make_instruction(
         return Err(pinocchio::program_error::ProgramError::NotEnoughAccountKeys);
     };
 
+    let amount_to_receive = unsafe{ *(data.as_ptr().add(1) as *const u64) };
+    let amount_to_give = unsafe{ *(data.as_ptr().add(9) as *const u64) };
+    
+    {
     let maker_ata_state = pinocchio_token::state::TokenAccount::from_account_info(&maker_ata)?;
     if maker_ata_state.owner() != maker.key() {
         return Err(pinocchio::program_error::ProgramError::IllegalOwner);
@@ -45,8 +49,6 @@ pub fn process_make_instruction(
     log(&escrow_account.key());
     assert_eq!(escrow_account_pda, *escrow_account.key());
 
-    let amount_to_receive = unsafe{ *(data.as_ptr().add(1) as *const u64) };
-    let amount_to_give = unsafe{ *(data.as_ptr().add(9) as *const u64) };
 
     let bump = [bump.to_le()];
     let seed = [Seed::from(b"escrow"), Seed::from(maker.key()), Seed::from(&bump)];
@@ -64,7 +66,7 @@ pub fn process_make_instruction(
 
         {
             let escrow_state = Escrow::from_account_info(escrow_account)?;
-        
+
             escrow_state.set_maker(maker.key());
             escrow_state.set_mint_a(mint_a.key());
             escrow_state.set_mint_b(mint_b.key());
@@ -85,6 +87,7 @@ pub fn process_make_instruction(
         token_program: token_program,
         system_program: system_program,
     }.invoke()?;
+    }
 
     pinocchio_token::instructions::Transfer {
         from: maker_ata,

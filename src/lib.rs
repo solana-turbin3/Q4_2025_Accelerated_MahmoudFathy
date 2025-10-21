@@ -8,7 +8,7 @@ mod instructions;
 
 entrypoint!(process_instruction);
 
-pinocchio_pubkey::declare_id!("4ibrEMW5F6hKnkW4jVedswYv6H6VtwPN6ar6dvXDN1nT");
+pinocchio_pubkey::declare_id!("RURxJrgqHSoJgqFbHyntxm1VSZxZugEveRewzvjVm5V");
 
 pub fn process_instruction(
     program_id: &Pubkey,
