@@ -8,7 +8,7 @@ pub struct Escrow {
     mint_b: [u8; 32],
     amount_to_receive: [u8; 8],
     amount_to_give: [u8; 8],
-    pub bump: u8,
+    pub bump: u8,    // To array [u8]
 }
 
 impl Escrow {

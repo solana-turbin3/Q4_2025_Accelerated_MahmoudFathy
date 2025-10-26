@@ -1,14 +1,38 @@
-use pinocchio::{account_info::AccountInfo, entrypoint, pubkey::Pubkey, ProgramResult};
+#![cfg_attr(not(test), no_std)]
+use pinocchio::{
+    nostd_panic_handler,
+    account_info::AccountInfo,
+    entrypoint,
+    pubkey::Pubkey,
+    ProgramResult
+};
 
-use crate::instructions::EscrowInstrctions;
+use crate::instructions::*;
 
+#[cfg(test)]
+extern crate std;
+
+extern crate alloc;
+pub use alloc::vec::Vec;
+
+// Use the no_std panic handler.
+#[cfg(target_os = "solana")]
+nostd_panic_handler!();
+
+#[cfg(test)]
 mod tests;
+
 mod state;
 mod instructions;
 
+pub use instructions::*;
+pub use state::*;
+
+
+#[cfg(not(feature = "no-entrypoint"))]
 entrypoint!(process_instruction);
 
-pinocchio_pubkey::declare_id!("RURxJrgqHSoJgqFbHyntxm1VSZxZugEveRewzvjVm5V");
+pinocchio_pubkey::declare_id!("EiJfMHkdFRYVts5Kvxg6ooBaZ1TV6qEiY41xjZuSFLSw");
 
 pub fn process_instruction(
     program_id: &Pubkey,
@@ -21,10 +45,9 @@ pub fn process_instruction(
     let (discriminator, data) = instruction_data.split_first()
         .ok_or(pinocchio::program_error::ProgramError::InvalidInstructionData)?;
 
-    match EscrowInstrctions::try_from(discriminator)? {
-        EscrowInstrctions::Make => instructions::process_make_instruction(accounts, data)?,
-        // EscrowInstrctions::MakeV2 => instructions::process_make_instruction_v2(accounts, data)?,
-        EscrowInstrctions::Take => instructions::process_take_instruction(accounts, data)?,
+    match FundraiserInstructions::try_from(discriminator)? {
+        FundraiserInstructions::Initialize => process_initialize_instruction(accounts, data)?,
+        FundraiserInstructions::Contribute=> process_contribute_instruction(accounts, data)?,
         _ => return Err(pinocchio::program_error::ProgramError::InvalidInstructionData),
     }
     Ok(())

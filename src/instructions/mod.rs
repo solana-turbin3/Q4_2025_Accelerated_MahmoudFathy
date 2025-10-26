@@ -1,28 +1,39 @@
-pub mod make;
-pub mod take;
-// pub mod make_2;
+pub mod initialize;
+pub mod contribute;
+pub mod admin_claim;
+pub mod refund;
 
-pub use make::*;
-pub use take::*;
-// pub use make_2::*;
+pub use initialize::*;
+pub use contribute::*;
+pub use refund::*;
+pub use admin_claim::*;
 
-pub enum EscrowInstrctions {
-    Make = 0,
-    Take = 1,
-    Cancel = 2,
-    MakeV2 = 3,
+// #[repr(u8)]
+pub enum FundraiserInstructions {
+    Initialize = 0,
+    Contribute = 1,
+    CheckContributions = 2,
+    Refund = 3,
 }
 
-impl TryFrom<&u8> for EscrowInstrctions {
+// - intialize
+// - contribute
+// - check_contributions
+// - refund
+impl TryFrom<&u8> for FundraiserInstructions {
     type Error = pinocchio::program_error::ProgramError;
+
 
     fn try_from(value: &u8) -> Result<Self, Self::Error> {
         match value {
-            0 => Ok(EscrowInstrctions::Make),
-            1 => Ok(EscrowInstrctions::Take),
-            2 => Ok(EscrowInstrctions::Cancel),
-            3 => Ok(EscrowInstrctions::MakeV2),
+            0 => Ok(FundraiserInstructions::Initialize),
+            1 => Ok(FundraiserInstructions::Contribute),
+            2 => Ok(FundraiserInstructions::CheckContributions),
+
+            3 => Ok(FundraiserInstructions::Refund),
             _ => Err(pinocchio::program_error::ProgramError::InvalidInstructionData),
         }
     }
+
 }
+
