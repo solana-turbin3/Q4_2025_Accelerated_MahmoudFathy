@@ -1,12 +1,12 @@
-pub mod initialize;
+pub mod check_contributions;
 pub mod contribute;
-pub mod admin_claim;
+pub mod initialize;
 pub mod refund;
 
-pub use initialize::*;
+pub use check_contributions::*;
 pub use contribute::*;
+pub use initialize::*;
 pub use refund::*;
-pub use admin_claim::*;
 
 // #[repr(u8)]
 pub enum FundraiserInstructions {
@@ -23,7 +23,6 @@ pub enum FundraiserInstructions {
 impl TryFrom<&u8> for FundraiserInstructions {
     type Error = pinocchio::program_error::ProgramError;
 
-
     fn try_from(value: &u8) -> Result<Self, Self::Error> {
         match value {
             0 => Ok(FundraiserInstructions::Initialize),
@@ -34,6 +33,4 @@ impl TryFrom<&u8> for FundraiserInstructions {
             _ => Err(pinocchio::program_error::ProgramError::InvalidInstructionData),
         }
     }
-
 }
-
