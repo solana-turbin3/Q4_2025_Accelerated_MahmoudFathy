@@ -1,10 +1,6 @@
 #![cfg_attr(not(test), no_std)]
 use pinocchio::{
-    nostd_panic_handler,
-    account_info::AccountInfo,
-    entrypoint,
-    pubkey::Pubkey,
-    ProgramResult
+    account_info::AccountInfo, entrypoint, nostd_panic_handler, pubkey::Pubkey, ProgramResult,
 };
 
 use crate::instructions::*;
@@ -22,12 +18,11 @@ nostd_panic_handler!();
 #[cfg(test)]
 mod tests;
 
-mod state;
 mod instructions;
+mod state;
 
 pub use instructions::*;
 pub use state::*;
-
 
 #[cfg(not(feature = "no-entrypoint"))]
 entrypoint!(process_instruction);
@@ -39,15 +34,19 @@ pub fn process_instruction(
     accounts: &[AccountInfo],
     instruction_data: &[u8],
 ) -> ProgramResult {
-
     assert_eq!(program_id, &ID);
 
-    let (discriminator, data) = instruction_data.split_first()
+    let (discriminator, data) = instruction_data
+        .split_first()
         .ok_or(pinocchio::program_error::ProgramError::InvalidInstructionData)?;
 
     match FundraiserInstructions::try_from(discriminator)? {
         FundraiserInstructions::Initialize => process_initialize_instruction(accounts, data)?,
-        FundraiserInstructions::Contribute=> process_contribute_instruction(accounts, data)?,
+        FundraiserInstructions::Contribute => process_contribute_instruction(accounts, data)?,
+        FundraiserInstructions::Refund => process_refund_instruction(accounts, data)?,
+        FundraiserInstructions::CheckContributions => {
+            process_check_contributions_instruction(accounts, data)?
+        }
         _ => return Err(pinocchio::program_error::ProgramError::InvalidInstructionData),
     }
     Ok(())
